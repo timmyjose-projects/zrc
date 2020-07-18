@@ -1,4 +1,3 @@
-const std = @import("std");
 const ArrayList = std.ArrayList;
 
 /// The public interface for a Checksum type.
@@ -7,13 +6,13 @@ const ArrayList = std.ArrayList;
 ///
 /// The following functions are required for a custom provider:
 ///  - reset
-///  - updateByte
+///  - updateByteArrayRange
+///  - close
 ///
 /// The following have default implementations, which can be
 /// overridden by providers:
+///   - updateByte
 ///   - updateByteArray
-///   - updateByteArrayRange
-///   - updateByteBuffer
 ///
 pub fn Checksum(comptime T: type) type {
     return struct {
@@ -21,38 +20,36 @@ pub fn Checksum(comptime T: type) type {
         pub const ByteBuffer = ArrayList(u8);
 
         reset_fn: fn (*Self) void,
-        update_byte_fn: fn (*Self, u8) void,
+        update_byte_array_range_fn: fn (*Self, []const u8, usize, usize) anyerror!void,
+        close_fn: fn (*Self) void,
 
         /// Reset the checksum to its initial value
-        pub fn reset(self: *Self) !void {
+        pub fn reset(self: *Self) void {
             self.reset_fn(self);
+        }
+
+        /// Update the current checksum with the (offset, offset + len) bytes from
+        /// the given byte array.
+        pub fn updateByteArrayRange(self: *Self, bs: []const u8, offset: usize, len: usize) !void {
+            try self.update_byte_array_range_fn(self, bs, offset, len);
         }
 
         /// Update the current checksum with the given
         /// byte.
-        pub fn updateByte(self: *Self, b: u8) void {
-            self.update_byte_fn(self, b);
+        /// default implementation
+        pub fn updateByte(self: *Self, b: u8) !void {
+            try self.updateByteArrayRange(&[_]u8{b}, 0, 1);
         }
 
         /// Update the current checksum with the given
         /// byte array.
         /// default implementation
-        pub fn updateByteArray(self: *Self, bs: []const u8) void {
-            self.updateByteArrayRange(bs, 0, bs.len);
+        pub fn updateByteArray(self: *Self, bs: []const u8) !void {
+            try self.updateByteArrayRange(bs, 0, bs.len);
         }
 
-        /// Update the current checksum with the (offset, offset + len) bytes from
-        /// the given byte array.
-        /// default implementation
-        pub fn updateByteArrayRange(self: *Self, bs: []const u8, offset: usize, len: usize) void {
-            // @TODO
-        }
-
-        /// Update the current checksum with the contents of the given
-        /// byte buffer.
-        /// default implementation
-        pub fn updateByteBuffer(self: *Self, byte_buf: ByteBuffer) void {
-            //@TODO
+        pub fn close(self: *Self) void {
+            self.close_fn(self);
         }
     };
 }
